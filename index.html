@@ -433,7 +433,7 @@
         });
     }
 
-    // ===== 渲染 =====
+    // ===== 渲染（按日期排序） =====
     function renderTable() {
         const filtered = getFilteredData();
         const body = document.getElementById('tableBody');
@@ -447,7 +447,8 @@
             return;
         }
         empty.style.display = 'none';
-        const rows = filtered.length > 0 ? filtered : data;
+        // 按日期排序（最新的在前）
+        const rows = (filtered.length > 0 ? filtered : data).sort((a, b) => a.date < b.date ? 1 : -1);
         body.innerHTML = rows.map(d => `
             <tr>
                 <td><input type="date" value="${d.date}" onchange="updateField('${d.id}','date',this.value)"></td>
