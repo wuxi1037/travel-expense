@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>豪游跟 - 旅行开销统计
+    <title>豪游跟 - 旅行开销统计</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -605,11 +605,11 @@
             });
 
             if (resp.status === 404) {
-                showToast('云端暂无数据，请先上传', 'error');
+                showToast('⚠️ 网络问题或 Token 无效，检查设置', 'error');
                 btn.innerHTML = orig; btn.disabled = false; return;
             }
-            if (resp.status === 403) {
-                showToast('Token 权限不足，请检查 public_repo', 'error');
+            if (resp.status === 403 || resp.status === 401) {
+                showToast('⚠️ Token 权限不足，需要 public_repo 权限', 'error');
                 btn.innerHTML = orig; btn.disabled = false; return;
             }
             if (!resp.ok) {
@@ -689,7 +689,11 @@
             }
             if (!resp.ok) {
                 const ed = await resp.json().catch(() => ({}));
-                showToast(`上传失败 (${resp.status}): ${ed.message || ''}`, 'error');
+                let msg = `上传失败 (${resp.status})`;
+                if (resp.status === 404) msg += '：用户名/仓库名有误，或 Token 未勾选 public_repo 权限';
+                else if (resp.status === 403) msg += '：Token 权限不足，需要 public_repo';
+                else msg += `：${ed.message || ''}`;
+                showToast(msg, 'error');
                 btn.innerHTML = orig; btn.disabled = false; return;
             }
 
