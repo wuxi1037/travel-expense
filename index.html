@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>旅行开销统计表</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -14,7 +14,6 @@
         }
         .container { max-width: 1100px; margin: 0 auto; }
 
-        /* Header */
         .header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -23,11 +22,18 @@
             margin-bottom: 24px;
             text-align: center;
             box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            position: relative;
         }
         .header h1 { font-size: 28px; margin-bottom: 8px; }
         .header p { opacity: 0.85; font-size: 15px; }
+        .header .sync-status {
+            position: absolute;
+            top: 12px;
+            right: 16px;
+            font-size: 12px;
+            opacity: 0.7;
+        }
 
-        /* Stats Cards */
         .stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -47,7 +53,6 @@
         .stat-card .value.red { color: #ef4444; }
         .stat-card .value.blue { color: #3b82f6; }
 
-        /* Controls */
         .controls {
             display: flex;
             gap: 10px;
@@ -62,19 +67,25 @@
             cursor: pointer;
             transition: all 0.2s;
             font-weight: 500;
+            font-family: inherit;
         }
         .controls button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
         .btn-add { background: #667eea; color: white; }
         .btn-clear { background: #fee2e2; color: #dc2626; }
         .btn-export { background: #059669; color: white; }
-        .btn-import { background: #dbeafe; color: #2563eb; }
-
+        .btn-import-csv { background: #dbeafe; color: #2563eb; }
+        .btn-sync-dl { background: #0ea5e9; color: white; }
+        .btn-sync-ul { background: #8b5cf6; color: white; }
+        .btn-settings { background: transparent; color: #94a3b8; border: 1px solid #d1d5db !important; }
         .btn-add:hover { background: #5a6fd6; }
         .btn-clear:hover { background: #fecaca; }
         .btn-export:hover { background: #047857; }
-        .btn-import:hover { background: #bfdbfe; }
+        .btn-import-csv:hover { background: #bfdbfe; }
+        .btn-sync-dl:hover { background: #0284c7; }
+        .btn-sync-ul:hover { background: #7c3aed; }
+        .btn-settings:hover { background: #f1f5f9; }
+        .controls button:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
 
-        /* Filters */
         .filters {
             display: flex;
             gap: 12px;
@@ -94,7 +105,6 @@
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
         }
 
-        /* Table */
         .table-wrap {
             background: white;
             border-radius: 12px;
@@ -128,15 +138,9 @@
             width: 1px;
             background: #e2e8f0;
         }
-        tbody tr {
-            transition: background 0.15s;
-        }
+        tbody tr { transition: background 0.15s; }
         tbody tr:hover { background: #f8fafc; }
-        tbody td {
-            padding: 10px 12px;
-            border-bottom: 1px solid #f1f5f9;
-            vertical-align: middle;
-        }
+        tbody td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
         tbody tr:last-child td { border-bottom: none; }
 
         td input, td select {
@@ -157,25 +161,12 @@
         }
 
         td .del-btn {
-            background: none;
-            border: none;
-            color: #94a3b8;
-            cursor: pointer;
-            font-size: 18px;
-            padding: 4px 8px;
-            border-radius: 4px;
-            transition: all 0.15s;
+            background: none; border: none; color: #94a3b8; cursor: pointer;
+            font-size: 18px; padding: 4px 8px; border-radius: 4px; transition: all 0.15s;
         }
         td .del-btn:hover { color: #dc2626; background: #fee2e2; }
 
-        /* Category */
-        .cat-tag {
-            display: inline-block;
-            padding: 2px 10px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 500;
-        }
+        .cat-tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
         .cat-交通 { background: #dbeafe; color: #1d4ed8; }
         .cat-住宿 { background: #fce7f3; color: #be185d; }
         .cat-餐饮 { background: #fef3c7; color: #b45309; }
@@ -184,75 +175,92 @@
         .cat-娱乐 { background: #fce7f3; color: #e11d48; }
         .cat-其他 { background: #f1f5f9; color: #64748b; }
 
-        /* Total row */
-        .total-row td {
-            background: #f1f5f9 !important;
-            font-weight: 700;
-            font-size: 14px;
-            border-top: 2px solid #e2e8f0;
-        }
-        .total-row .label-total { text-align: right; color: #475569; }
-
-        /* Section totals */
         .section-total {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            margin-bottom: 24px;
+            background: white; border-radius: 12px; padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 24px;
         }
         .section-total h3 { font-size: 15px; margin-bottom: 12px; color: #475569; }
-        .section-total .bar-wrap {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .bar-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .bar-row .cat-label {
-            width: 60px;
-            font-size: 13px;
-            color: #555;
-            flex-shrink: 0;
-        }
-        .bar-row .cat-amt {
-            width: 70px;
-            font-size: 13px;
-            font-weight: 600;
-            text-align: right;
-            flex-shrink: 0;
-        }
-        .bar-track {
-            flex: 1;
-            height: 20px;
-            background: #f1f5f9;
-            border-radius: 10px;
-            overflow: hidden;
-        }
-        .bar-fill {
-            height: 100%;
-            border-radius: 10px;
-            transition: width 0.4s ease;
-            min-width: 4px;
-        }
+        .bar-wrap { display: flex; flex-direction: column; gap: 8px; }
+        .bar-row { display: flex; align-items: center; gap: 10px; }
+        .bar-row .cat-label { width: 60px; font-size: 13px; color: #555; flex-shrink: 0; }
+        .bar-row .cat-amt { width: 70px; font-size: 13px; font-weight: 600; text-align: right; flex-shrink: 0; }
+        .bar-track { flex: 1; height: 20px; background: #f1f5f9; border-radius: 10px; overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: 10px; transition: width 0.4s ease; min-width: 4px; }
 
-        .empty-msg {
-            text-align: center;
-            padding: 48px 20px;
-            color: #94a3b8;
-        }
+        .empty-msg { text-align: center; padding: 48px 20px; color: #94a3b8; }
         .empty-msg .icon { font-size: 48px; margin-bottom: 12px; }
         .empty-msg p { font-size: 15px; }
 
         #hiddenImport { display: none; }
 
+        /* Modal */
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4); backdrop-filter: blur(2px); z-index: 1000;
+            justify-content: center; align-items: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: white; border-radius: 16px; padding: 28px; width: 90%; max-width: 460px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto;
+        }
+        .modal h2 { font-size: 20px; margin-bottom: 6px; }
+        .modal p.modal-desc { font-size: 14px; color: #64748b; margin-bottom: 20px; }
+        .modal label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 6px; margin-top: 16px; }
+        .modal label:first-of-type { margin-top: 0; }
+        .modal input[type="text"], .modal input[type="password"] {
+            width: 100%; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 8px;
+            font-size: 14px; font-family: inherit;
+        }
+        .modal input:focus {
+            outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+        }
+        .modal .modal-btns { display: flex; gap: 10px; margin-top: 24px; justify-content: flex-end; }
+        .modal .modal-btns button {
+            padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px;
+            cursor: pointer; font-weight: 500; font-family: inherit;
+        }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5a6fd6; }
+        .btn-secondary { background: #f1f5f9; color: #475569; }
+        .btn-secondary:hover { background: #e2e8f0; }
+        .modal-hint {
+            font-size: 12px; color: #94a3b8; margin-top: 6px; line-height: 1.5;
+        }
+        .modal-hint a { color: #667eea; }
+        .status-row {
+            display: flex; align-items: center; gap: 8px; font-size: 13px;
+            color: #64748b; margin-top: 16px; padding: 12px;
+            background: #f8fafc; border-radius: 8px;
+        }
+        .status-row .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .dot.green { background: #22c55e; }
+        .dot.red { background: #ef4444; }
+        .dot.yellow { background: #eab308; }
+
+        /* Toast */
+        .toast {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background: #1e293b; color: white; padding: 12px 24px; border-radius: 10px;
+            font-size: 14px; z-index: 2000; opacity: 0; transition: opacity 0.3s ease;
+            pointer-events: none; white-space: nowrap; max-width: 90vw;
+        }
+        .toast.show { opacity: 1; }
+        .toast.success { background: #059669; }
+        .toast.error { background: #dc2626; }
+
+        .spinner {
+            display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite;
+            vertical-align: middle; margin-right: 6px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
         @media (max-width: 600px) {
-            body { padding: 10px; }
+            body { padding: 12px; }
             .header { padding: 20px; }
             .header h1 { font-size: 22px; }
+            .controls button { padding: 8px 14px; font-size: 13px; }
         }
     </style>
 </head>
@@ -261,6 +269,7 @@
     <div class="header">
         <h1>✈️ 旅行开销统计表</h1>
         <p>记录每一笔花费，轻松掌握旅行预算</p>
+        <div class="sync-status" id="syncStatusDisplay"></div>
     </div>
 
     <div class="stats">
@@ -283,21 +292,21 @@
     </div>
 
     <div class="controls">
-        <button class="btn-add" onclick="addRow()">＋ 添加一行</button>
-        <button class="btn-export" onclick="exportCSV()">📥 导出 CSV</button>
-        <button class="btn-import" onclick="document.getElementById('hiddenImport').click()">📤 导入 CSV</button>
-        <button class="btn-clear" onclick="clearAll()">🗑 清空所有</button>
+        <button class="btn-add" onclick="addRow()">＋ 添加</button>
+        <button class="btn-sync-ul" id="btnUpload" onclick="syncUpload()">☁️ 上传云端</button>
+        <button class="btn-sync-dl" id="btnDownload" onclick="syncDownload()">☁️ 下载云端</button>
+        <button class="btn-export" onclick="exportCSV()">📥 导出</button>
+        <button class="btn-import-csv" onclick="document.getElementById('hiddenImport').click()">📤 导入</button>
+        <button class="btn-settings" onclick="openSettings()">⚙️</button>
+        <button class="btn-clear" onclick="clearAll()">🗑</button>
     </div>
 
     <div class="filters">
         <select id="filterCategory" onchange="renderTable()">
             <option value="">全部类别</option>
-            <option value="交通">交通</option>
-            <option value="住宿">住宿</option>
-            <option value="餐饮">餐饮</option>
-            <option value="门票">门票</option>
-            <option value="购物">购物</option>
-            <option value="娱乐">娱乐</option>
+            <option value="交通">交通</option><option value="住宿">住宿</option>
+            <option value="餐饮">餐饮</option><option value="门票">门票</option>
+            <option value="购物">购物</option><option value="娱乐">娱乐</option>
             <option value="其他">其他</option>
         </select>
         <input type="text" id="filterKeyword" placeholder="🔍 搜索备注..." oninput="renderTable()">
@@ -321,7 +330,7 @@
         </table>
         <div id="emptyState" class="empty-msg">
             <div class="icon">📋</div>
-            <p>还没有记录，点击「添加一行」开始吧！</p>
+            <p>还没有记录，点击「添加」开始吧！</p>
         </div>
     </div>
 
@@ -333,6 +342,41 @@
 
 <input type="file" id="hiddenImport" accept=".csv" onchange="importCSV(event)">
 
+<!-- 同步设置弹窗 -->
+<div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+        <h2>⚙️ 云同步设置</h2>
+        <p class="modal-desc">配置 GitHub 云同步后，多台设备可共享同一份数据</p>
+
+        <label>GitHub 用户名</label>
+        <input type="text" id="ghUser" placeholder="例如: wuxi1037">
+
+        <label>仓库名</label>
+        <input type="text" id="ghRepo" placeholder="例如: travel-expense">
+
+        <label>Personal Access Token</label>
+        <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+        <div class="modal-hint">
+            ① 打开 <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a><br>
+            ② 点「Generate new token (classic)」<br>
+            ③ 勾选 <strong>public_repo</strong>，生成后复制粘贴到上方
+        </div>
+
+        <div class="status-row" id="syncStatusRow">
+            <span class="dot yellow"></span>
+            <span id="syncStatusText">未配置同步</span>
+        </div>
+
+        <div class="modal-btns">
+            <button class="btn-secondary" onclick="closeSettings()">取消</button>
+            <button class="btn-primary" onclick="saveSettings()">保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- 提示 Toast -->
+<div class="toast" id="toast"></div>
+
 <script>
     const CATEGORIES = ['交通', '住宿', '餐饮', '门票', '购物', '娱乐', '其他'];
     const CAT_COLORS = {
@@ -341,36 +385,38 @@
     };
 
     let data = [];
+    let lastSyncTime = null;
 
+    // ===== 工具函数 =====
     function today() {
         const d = new Date();
         return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     }
-
     function generateId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+    function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
 
+    // ===== Toast 提示 =====
+    let toastTimer = null;
+    function showToast(msg, type) {
+        const el = document.getElementById('toast');
+        el.textContent = msg;
+        el.className = 'toast' + (type ? ' ' + type : '');
+        clearTimeout(toastTimer);
+        void el.offsetWidth;
+        el.classList.add('show');
+        toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+    }
+
+    // ===== 数据操作 =====
     function addRow(date, category, note, amount) {
-        data.push({
-            id: generateId(),
-            date: date || today(),
-            category: category || '交通',
-            note: note || '',
-            amount: amount != null ? amount : 0
-        });
+        data.push({ id: generateId(), date: date || today(), category: category || '交通', note: note || '', amount: amount != null ? amount : 0 });
         renderTable();
     }
-
-    function deleteRow(id) {
-        data = data.filter(d => d.id !== id);
-        renderTable();
-    }
-
-    function clearAll() {
-        if (data.length === 0) return;
-        if (confirm('确定要清空所有记录吗？')) {
-            data = [];
-            renderTable();
-        }
+    function deleteRow(id) { data = data.filter(d => d.id !== id); renderTable(); }
+    function clearAll() { if (data.length === 0) return; if (confirm('确定要清空所有记录吗？')) { data = []; renderTable(); } }
+    function updateField(id, field, value) {
+        const item = data.find(d => d.id === id);
+        if (item) { item[field] = value; renderTable(); }
     }
 
     function getFilteredData() {
@@ -378,7 +424,6 @@
         const kw = document.getElementById('filterKeyword').value.trim().toLowerCase();
         const from = document.getElementById('filterDateFrom').value;
         const to = document.getElementById('filterDateTo').value;
-
         return data.filter(d => {
             if (cat && d.category !== cat) return false;
             if (kw && !d.note.toLowerCase().includes(kw) && !d.category.toLowerCase().includes(kw)) return false;
@@ -388,114 +433,80 @@
         });
     }
 
+    // ===== 渲染 =====
     function renderTable() {
         const filtered = getFilteredData();
         const body = document.getElementById('tableBody');
         const empty = document.getElementById('emptyState');
-
         if (data.length === 0) {
             body.innerHTML = '';
             empty.style.display = 'block';
             updateStats([]);
             updateCategoryBars([]);
+            saveData();
             return;
         }
         empty.style.display = 'none';
-
-        const displayRows = filtered.length > 0 ? filtered : data;
-        body.innerHTML = displayRows.map(d => `
+        const rows = filtered.length > 0 ? filtered : data;
+        body.innerHTML = rows.map(d => `
             <tr>
                 <td><input type="date" value="${d.date}" onchange="updateField('${d.id}','date',this.value)"></td>
-                <td>
-                    <select onchange="updateField('${d.id}','category',this.value)">
-                        ${CATEGORIES.map(c => `<option value="${c}" ${c===d.category?'selected':''}>${c}</option>`).join('')}
-                    </select>
-                </td>
-                <td><input type="text" value="${escapeHtml(d.note)}" placeholder="例如：高铁票、酒店..." onchange="updateField('${d.id}','note',this.value)"></td>
+                <td><select onchange="updateField('${d.id}','category',this.value)">
+                    ${CATEGORIES.map(c => `<option value="${c}" ${c===d.category?'selected':''}>${c}</option>`).join('')}
+                </select></td>
+                <td><input type="text" value="${escapeHtml(d.note)}" placeholder="高铁票、酒店..." onchange="updateField('${d.id}','note',this.value)"></td>
                 <td><input type="number" step="0.01" min="0" value="${d.amount}" onchange="updateField('${d.id}','amount',parseFloat(this.value)||0)"></td>
                 <td style="text-align:center;"><button class="del-btn" onclick="deleteRow('${d.id}')">✕</button></td>
             </tr>
         `).join('');
-
         updateStats(filtered.length > 0 ? filtered : data);
         updateCategoryBars(filtered.length > 0 ? filtered : data);
-    }
-
-    function escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
-
-    function updateField(id, field, value) {
-        const item = data.find(d => d.id === id);
-        if (item) {
-            item[field] = value;
-            renderTable();
-        }
+        saveData();
     }
 
     function updateStats(items) {
         const total = items.reduce((s, d) => s + d.amount, 0);
-        const count = items.length;
         document.getElementById('totalAmount').textContent = `¥${total.toFixed(2)}`;
-        document.getElementById('totalCount').textContent = count;
-
-        // daily avg
+        document.getElementById('totalCount').textContent = items.length;
         const dates = [...new Set(items.map(d => d.date))].sort();
-        let dailyAvg = 0;
-        if (dates.length > 0) {
-            dailyAvg = total / dates.length;
-        }
-        document.getElementById('dailyAvg').textContent = `¥${dailyAvg.toFixed(2)}`;
-
-        // max
+        document.getElementById('dailyAvg').textContent = `¥${(dates.length > 0 ? total / dates.length : 0).toFixed(2)}`;
         const maxA = items.length > 0 ? Math.max(...items.map(d => d.amount)) : 0;
         document.getElementById('maxAmount').textContent = `¥${maxA.toFixed(2)}`;
     }
 
     function updateCategoryBars(items) {
-        const container = document.getElementById('categoryBars');
         const catTotals = {};
-        items.forEach(d => {
-            catTotals[d.category] = (catTotals[d.category] || 0) + d.amount;
-        });
-
+        items.forEach(d => { catTotals[d.category] = (catTotals[d.category] || 0) + d.amount; });
         const maxVal = Math.max(...Object.values(catTotals), 1);
-
-        let html = '';
-        CATEGORIES.forEach(cat => {
-            const amt = catTotals[cat] || 0;
+        document.getElementById('categoryBars').innerHTML = CATEGORIES.map(c => {
+            const amt = catTotals[c] || 0;
             const pct = maxVal > 0 ? (amt / maxVal * 100) : 0;
-            html += `
-                <div class="bar-row">
-                    <div class="cat-label"><span class="cat-tag cat-${cat}">${cat}</span></div>
-                    <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${CAT_COLORS[cat]};"></div></div>
-                    <div class="cat-amt">¥${amt.toFixed(2)}</div>
-                </div>
-            `;
-        });
-        container.innerHTML = html;
+            return `<div class="bar-row">
+                <div class="cat-label"><span class="cat-tag cat-${c}">${c}</span></div>
+                <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${CAT_COLORS[c]};"></div></div>
+                <div class="cat-amt">¥${amt.toFixed(2)}</div>
+            </div>`;
+        }).join('');
     }
 
+    // ===== 本地存储 =====
+    function saveData() { try { localStorage.setItem('travel_data', JSON.stringify(data)); } catch(e) {} }
+    function loadData() {
+        try {
+            const raw = localStorage.getItem('travel_data');
+            if (raw) { const p = JSON.parse(raw); if (Array.isArray(p) && p.length > 0) { data = p; renderTable(); } }
+        } catch(e) {}
+    }
+
+    // ===== CSV 导入导出 =====
     function exportCSV() {
-        if (data.length === 0) {
-            alert('暂无数据可导出');
-            return;
-        }
+        if (data.length === 0) { showToast('暂无数据可导出', 'error'); return; }
         let csv = '日期,类别,备注,金额\n';
-        data.forEach(d => {
-            const note = '"' + d.note.replace(/"/g, '""') + '"';
-            csv += `${d.date},${d.category},${note},${d.amount}\n`;
-        });
-        const BOM = '﻿';
-        const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
+        data.forEach(d => { const n = '"' + d.note.replace(/"/g, '""') + '"'; csv += `${d.date},${d.category},${n},${d.amount}\n`; });
+        const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `旅行开销_${today()}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
+        const a = document.createElement('a'); a.href = url; a.download = `旅行开销_${today()}.csv`;
+        a.click(); URL.revokeObjectURL(url);
     }
 
     function importCSV(event) {
@@ -506,157 +517,263 @@
             try {
                 const text = e.target.result;
                 const lines = text.split('\n').filter(l => l.trim());
-                if (lines.length < 2) { alert('CSV 文件为空或格式不正确'); return; }
-
-                // detect delimiter
+                if (lines.length < 2) { showToast('CSV 文件为空或格式不对', 'error'); return; }
                 const delim = lines[0].includes('\t') ? '\t' : ',';
-                const header = parseCSVLine(lines[0], delim);
-                const dateIdx = header.findIndex(h => /日期|date/i.test(h));
-                const catIdx = header.findIndex(h => /类别|分类|category/i.test(h));
-                const noteIdx = header.findIndex(h => /备注|项目|描述|note|desc/i.test(h));
-                const amtIdx = header.findIndex(h => /金额|花费|费用|amount|price|cost/i.test(h));
-
-                if (dateIdx === -1 || amtIdx === -1) {
-                    alert('CSV 需要包含"日期"和"金额"列');
-                    return;
-                }
-
+                const h = parseCSVLine(lines[0], delim);
+                const di = h.findIndex(x => /日期|date/i.test(x));
+                const ci = h.findIndex(x => /类别|分类|category/i.test(x));
+                const ni = h.findIndex(x => /备注|项目|描述|note|desc/i.test(x));
+                const ai = h.findIndex(x => /金额|花费|费用|amount|price|cost/i.test(x));
+                if (di === -1 || ai === -1) { showToast('CSV 需要包含"日期"和"金额"列', 'error'); return; }
                 let imported = 0;
                 for (let i = 1; i < lines.length; i++) {
                     const cols = parseCSVLine(lines[i], delim);
-                    const date = cols[dateIdx]?.trim() || today();
-                    const category = catIdx >= 0 ? (cols[catIdx]?.trim() || '其他') : '其他';
-                    const note = noteIdx >= 0 ? (cols[noteIdx]?.trim() || '') : '';
-                    const amount = parseFloat(cols[amtIdx]?.trim()) || 0;
-
-                    if (!CATEGORIES.includes(category)) {
-                        data.push({ id: generateId(), date, category: '其他', note: `[${category}]${note}`, amount });
-                    } else {
-                        data.push({ id: generateId(), date, category, note, amount });
-                    }
+                    const date = cols[di]?.trim() || today();
+                    const cat = ci >= 0 ? (cols[ci]?.trim() || '其他') : '其他';
+                    const note = ni >= 0 ? (cols[ni]?.trim() || '') : '';
+                    const amt = parseFloat(cols[ai]?.trim()) || 0;
+                    data.push({ id: generateId(), date, category: CATEGORIES.includes(cat) ? cat : '其他', note: CATEGORIES.includes(cat) ? note : `[${cat}]${note}`, amount: amt });
                     imported++;
                 }
                 renderTable();
-                alert(`成功导入 ${imported} 条记录！`);
-            } catch(err) {
-                alert('导入失败：' + err.message);
-            }
+                showToast(`成功导入 ${imported} 条记录`, 'success');
+            } catch(err) { showToast('导入失败：' + err.message, 'error'); }
             event.target.value = '';
         };
         reader.readAsText(file);
     }
 
     function parseCSVLine(line, delim) {
-        const result = [];
-        let cur = '';
-        let inQuote = false;
+        const r = []; let cur = '', q = false;
         for (let i = 0; i < line.length; i++) {
-            const ch = line[i];
-            if (inQuote) {
-                if (ch === '"') {
-                    if (i + 1 < line.length && line[i+1] === '"') {
-                        cur += '"';
-                        i++;
-                    } else {
-                        inQuote = false;
-                    }
-                } else {
-                    cur += ch;
-                }
-            } else {
-                if (ch === '"') {
-                    inQuote = true;
-                } else if (ch === delim) {
-                    result.push(cur);
-                    cur = '';
-                } else {
-                    cur += ch;
-                }
-            }
+            const c = line[i];
+            if (q) { if (c === '"') { if (i+1 < line.length && line[i+1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+            else { if (c === '"') q = true; else if (c === delim) { r.push(cur); cur = ''; } else cur += c; }
         }
-        result.push(cur);
-        return result;
+        r.push(cur); return r;
     }
 
-    // Auto-save to localStorage
-    function saveData() {
-        try {
-            localStorage.setItem('travel_data', JSON.stringify(data));
-        } catch(e) {}
+    // ===== GitHub 云同步 =====
+    function getSyncConfig() {
+        try { const r = localStorage.getItem('travel_sync_config'); return r ? JSON.parse(r) : null; } catch(e) { return null; }
+    }
+    function saveSyncConfig(c) { localStorage.setItem('travel_sync_config', JSON.stringify(c)); }
+
+    function updateSyncStatusDisplay() {
+        const el = document.getElementById('syncStatusDisplay');
+        const config = getSyncConfig();
+        if (config && config.token) {
+            el.textContent = '☁️ 已连接' + (lastSyncTime ? ` · 上次: ${lastSyncTime}` : '');
+        } else {
+            el.textContent = '☁️ 未配置';
+        }
     }
 
-    function loadData() {
+    function setButtonsLoading(v) {
+        document.getElementById('btnDownload').disabled = v;
+        document.getElementById('btnUpload').disabled = v;
+    }
+
+    async function checkConfig() {
+        const config = getSyncConfig();
+        if (!config || !config.token || !config.user || !config.repo) {
+            showToast('请先在 ⚙️ 设置中配置 GitHub 同步', 'error');
+            openSettings();
+            return null;
+        }
+        return config;
+    }
+
+    // 下载云端数据
+    async function syncDownload() {
+        const config = await checkConfig();
+        if (!config) return;
+
+        const btn = document.getElementById('btnDownload');
+        btn.disabled = true;
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner"></span> 下载中...';
+
         try {
-            const raw = localStorage.getItem('travel_data');
-            if (raw) {
-                const parsed = JSON.parse(raw);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    data = parsed;
-                    renderTable();
+            const url = `https://api.github.com/repos/${config.user}/${config.repo}/contents/data/expenses.json`;
+            const resp = await fetch(url, {
+                headers: {
+                    'Authorization': 'Bearer ' + config.token,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'User-Agent': 'travel-expense-app'
                 }
+            });
+
+            if (resp.status === 404) {
+                showToast('云端暂无数据，请先上传', 'error');
+                btn.innerHTML = orig; btn.disabled = false; return;
             }
-        } catch(e) {}
+            if (resp.status === 403) {
+                showToast('Token 权限不足，请检查 public_repo', 'error');
+                btn.innerHTML = orig; btn.disabled = false; return;
+            }
+            if (!resp.ok) {
+                showToast('下载失败 (' + resp.status + ')', 'error');
+                btn.innerHTML = orig; btn.disabled = false; return;
+            }
+
+            const json = await resp.json();
+            const cloudData = JSON.parse(atob(json.content));
+            localStorage.setItem('travel_cloud_sha', json.sha);
+
+            if (!Array.isArray(cloudData)) { showToast('云端数据格式错误', 'error'); btn.innerHTML = orig; btn.disabled = false; return; }
+
+            // 合并：以云端为主，添加本地独有的记录
+            const cloudIds = new Set(cloudData.map(d => d.id));
+            let added = 0;
+            data.forEach(d => { if (!cloudIds.has(d.id)) { cloudData.push(d); added++; } });
+
+            data = cloudData;
+            renderTable();
+
+            const now = new Date();
+            lastSyncTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+            updateSyncStatusDisplay();
+            showToast(added > 0 ? `下载成功，合并了本地 ${added} 条记录` : '下载成功！数据已更新', 'success');
+        } catch(err) {
+            showToast('下载失败：' + err.message, 'error');
+        }
+        btn.innerHTML = orig;
+        btn.disabled = false;
     }
 
-    // Override data mutation to trigger save
-    const origAddRow = addRow;
-    const origDeleteRow = deleteRow;
-    const origUpdateField = updateField;
-    const origClearAll = clearAll;
+    // 上传到云端
+    async function syncUpload() {
+        const config = await checkConfig();
+        if (!config) return;
+        if (data.length === 0) { showToast('没有数据可以上传', 'error'); return; }
 
-    // Patch save into all mutations
-    function patchData() {
-        const origPush = data.push;
-        data.push = function(...args) {
-            const result = origPush.apply(data, args);
-            saveData();
-            return result;
-        };
-        data = new Proxy(data, {
-            set(target, prop, value) {
-                target[prop] = value;
-                saveData();
-                return true;
+        const btn = document.getElementById('btnUpload');
+        btn.disabled = true;
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner"></span> 上传中...';
+
+        try {
+            const content = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+
+            // 先查一下文件的 SHA
+            let existingSha = localStorage.getItem('travel_cloud_sha');
+            try {
+                const ck = await fetch(`https://api.github.com/repos/${config.user}/${config.repo}/contents/data/expenses.json`, {
+                    headers: { 'Authorization': 'Bearer ' + config.token, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'travel-expense-app' }
+                });
+                if (ck.ok) existingSha = (await ck.json()).sha;
+            } catch(e) {}
+
+            const body = { message: `同步旅行数据 ${today()}`, content, branch: 'master' };
+            if (existingSha) body.sha = existingSha;
+
+            const resp = await fetch(`https://api.github.com/repos/${config.user}/${config.repo}/contents/data/expenses.json`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': 'Bearer ' + config.token,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'User-Agent': 'travel-expense-app',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(body)
+            });
+
+            if (resp.status === 409) {
+                showToast('冲突！请先下载最新的云端数据再上传', 'error');
+                btn.innerHTML = orig; btn.disabled = false; return;
             }
-        });
+            if (resp.status === 403) {
+                showToast('Token 权限不足，请检查 public_repo', 'error');
+                btn.innerHTML = orig; btn.disabled = false; return;
+            }
+            if (!resp.ok) {
+                const ed = await resp.json().catch(() => ({}));
+                showToast(`上传失败 (${resp.status}): ${ed.message || ''}`, 'error');
+                btn.innerHTML = orig; btn.disabled = false; return;
+            }
+
+            const result = await resp.json();
+            localStorage.setItem('travel_cloud_sha', result.content.sha);
+
+            const now = new Date();
+            lastSyncTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+            updateSyncStatusDisplay();
+            showToast('上传成功！云端数据已更新 ✅', 'success');
+        } catch(err) {
+            showToast('上传失败：' + err.message, 'error');
+        }
+        btn.innerHTML = orig;
+        btn.disabled = false;
     }
 
-    // Override after initial load
-    const _origRender = renderTable;
-    renderTable = function() {
-        _origRender();
-        saveData();
-    };
+    // ===== 设置弹窗 =====
+    function openSettings() {
+        const config = getSyncConfig();
+        if (config) {
+            document.getElementById('ghUser').value = config.user || '';
+            document.getElementById('ghRepo').value = config.repo || '';
+            document.getElementById('ghToken').value = config.token || '';
+        }
+        updateModalStatus();
+        document.getElementById('settingsModal').classList.add('active');
+    }
 
-    // Add default sample data if empty
+    function closeSettings() { document.getElementById('settingsModal').classList.remove('active'); }
+
+    function updateModalStatus() {
+        const config = getSyncConfig();
+        const dot = document.querySelector('#syncStatusRow .dot');
+        const text = document.getElementById('syncStatusText');
+        if (config && config.token) {
+            dot.className = 'dot green';
+            text.textContent = `✅ 已配置 (${config.user}/${config.repo})`;
+        } else {
+            dot.className = 'dot yellow';
+            text.textContent = '⚠️ 未配置';
+        }
+    }
+
+    function saveSettings() {
+        const user = document.getElementById('ghUser').value.trim();
+        const repo = document.getElementById('ghRepo').value.trim();
+        const token = document.getElementById('ghToken').value.trim();
+        if (!user || !repo || !token) { showToast('请填写完整信息', 'error'); return; }
+        saveSyncConfig({ user, repo, token });
+        updateModalStatus();
+        updateSyncStatusDisplay();
+        closeSettings();
+        showToast('同步设置已保存 ✅', 'success');
+    }
+
+    document.getElementById('settingsModal').addEventListener('click', function(e) {
+        if (e.target === this) closeSettings();
+    });
+
+    // ===== 初始化 =====
     function initSampleData() {
         if (data.length === 0) {
-            const today_date = today();
-            const ymd = today_date.split('-');
-            const y = parseInt(ymd[0]), m = parseInt(ymd[1]), d = parseInt(ymd[2]);
-            function dayOffset(offset) {
-                const dt = new Date(y, m-1, d + offset);
-                return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
-            }
+            const td = today();
+            const y = parseInt(td.split('-')[0]), m = parseInt(td.split('-')[1]), d = parseInt(td.split('-')[2]);
+            const off = (n) => { const dt = new Date(y, m-1, d+n); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`; };
             data.push(
-                { id: generateId(), date: dayOffset(0), category: '交通', note: '高铁票（往返）', amount: 536 },
-                { id: generateId(), date: dayOffset(0), category: '住宿', note: '酒店 3晚', amount: 1200 },
-                { id: generateId(), date: dayOffset(1), category: '餐饮', note: '午餐', amount: 68 },
-                { id: generateId(), date: dayOffset(1), category: '门票', note: '景区门票', amount: 180 },
-                { id: generateId(), date: dayOffset(1), category: '交通', note: '出租车', amount: 35 },
-                { id: generateId(), date: dayOffset(2), category: '餐饮', note: '早餐', amount: 25 },
-                { id: generateId(), date: dayOffset(2), category: '购物', note: '纪念品', amount: 150 },
-                { id: generateId(), date: dayOffset(2), category: '娱乐', note: '演出票', amount: 280 }
+                { id: generateId(), date: off(0), category: '交通', note: '高铁票（往返）', amount: 536 },
+                { id: generateId(), date: off(0), category: '住宿', note: '酒店 3晚', amount: 1200 },
+                { id: generateId(), date: off(1), category: '餐饮', note: '午餐', amount: 68 },
+                { id: generateId(), date: off(1), category: '门票', note: '景区门票', amount: 180 },
+                { id: generateId(), date: off(1), category: '交通', note: '出租车', amount: 35 },
+                { id: generateId(), date: off(2), category: '餐饮', note: '早餐', amount: 25 },
+                { id: generateId(), date: off(2), category: '购物', note: '纪念品', amount: 150 },
+                { id: generateId(), date: off(2), category: '娱乐', note: '演出票', amount: 280 }
             );
             renderTable();
         }
     }
 
-    // Init
+    // 启动
     loadData();
     initSampleData();
-
-    // Save on page unload
+    updateSyncStatusDisplay();
     window.addEventListener('beforeunload', saveData);
 </script>
 </body>
