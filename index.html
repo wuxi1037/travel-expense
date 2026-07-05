@@ -268,7 +268,7 @@
 <div class="container">
     <div class="header">
         <h1>✈️ 豪游跟</h1>
-        <p>记录每一笔花费，轻松掌握旅行预算</p>
+        <p>两台手机用同步码互传数据，轻松掌握旅行预算</p>
         <div class="sync-status" id="syncStatusDisplay"></div>
     </div>
 
@@ -345,31 +345,31 @@
 <!-- 同步设置弹窗 -->
 <div class="modal-overlay" id="settingsModal">
     <div class="modal">
-        <h2>⚙️ 云同步设置</h2>
-        <p class="modal-desc">配置 GitHub 云同步后，多台设备可共享同一份数据</p>
+        <h2>⚙️ 同步设置</h2>
+        <p class="modal-desc">两台手机用同一个同步码，数据就能互传</p>
 
-        <label>GitHub 用户名</label>
-        <input type="text" id="ghUser" placeholder="例如: wuxi1037">
-
-        <label>仓库名</label>
-        <input type="text" id="ghRepo" placeholder="例如: travel-expense">
-
-        <label>Personal Access Token</label>
-        <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
-        <div class="modal-hint">
-            ① 打开 <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a><br>
-            ② 点「Generate new token (classic)」<br>
-            ③ 勾选 <strong>public_repo</strong>，生成后复制粘贴到上方
+        <label>你的同步码</label>
+        <div style="display:flex;gap:8px;">
+            <input type="text" id="syncCodeDisplay" readonly placeholder="还没有同步码" style="flex:1;background:#f8fafc;">
+            <button class="btn-primary" onclick="copySyncCode()" style="white-space:nowrap;padding:10px 16px;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-family:inherit;">📋 复制</button>
         </div>
+        <div class="modal-hint">首次点「☁️ 上传云端」会自动生成同步码</div>
+
+        <label>输入朋友的同步码</label>
+        <div style="display:flex;gap:8px;">
+            <input type="text" id="syncCodeInput" placeholder="粘贴朋友的同步码" style="flex:1;">
+            <button class="btn-primary" onclick="connectSync()" style="white-space:nowrap;padding:10px 16px;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-family:inherit;">🔗 连接</button>
+        </div>
+        <div class="modal-hint">朋友上传后会生成同步码，你填到这里即可连接</div>
 
         <div class="status-row" id="syncStatusRow">
             <span class="dot yellow"></span>
-            <span id="syncStatusText">未配置同步</span>
+            <span id="syncStatusText">未连接</span>
         </div>
 
         <div class="modal-btns">
-            <button class="btn-secondary" onclick="closeSettings()">取消</button>
-            <button class="btn-primary" onclick="saveSettings()">保存</button>
+            <button class="btn-secondary" onclick="disconnectSync()" style="background:#fee2e2;color:#dc2626;">断开连接</button>
+            <button class="btn-secondary" onclick="closeSettings()">关闭</button>
         </div>
     </div>
 </div>
@@ -553,41 +553,37 @@
         r.push(cur); return r;
     }
 
-    // ===== GitHub 云同步 =====
-    function getSyncConfig() {
-        try { const r = localStorage.getItem('travel_sync_config'); return r ? JSON.parse(r) : null; } catch(e) { return null; }
+    // ===== 云同步（使用 jsonblob.com，国内网络可用） =====
+    function getSyncId() {
+        try { return localStorage.getItem('travel_sync_id'); } catch(e) { return null; }
     }
-    function saveSyncConfig(c) { localStorage.setItem('travel_sync_config', JSON.stringify(c)); }
+    function saveSyncId(id) {
+        if (id) localStorage.setItem('travel_sync_id', id);
+    }
 
     function updateSyncStatusDisplay() {
         const el = document.getElementById('syncStatusDisplay');
-        const config = getSyncConfig();
-        if (config && config.token) {
+        const sid = getSyncId();
+        if (sid) {
             el.textContent = '☁️ 已连接' + (lastSyncTime ? ` · 上次: ${lastSyncTime}` : '');
         } else {
-            el.textContent = '☁️ 未配置';
+            el.textContent = '☁️ 未连接';
         }
     }
 
-    function setButtonsLoading(v) {
-        document.getElementById('btnDownload').disabled = v;
-        document.getElementById('btnUpload').disabled = v;
-    }
-
-    async function checkConfig() {
-        const config = getSyncConfig();
-        if (!config || !config.token || !config.user || !config.repo) {
-            showToast('请先在 ⚙️ 设置中配置 GitHub 同步', 'error');
-            openSettings();
-            return null;
-        }
-        return config;
+    function getBlobUrl() {
+        const sid = getSyncId();
+        return sid ? `https://jsonblob.com/api/jsonBlob/${sid}` : null;
     }
 
     // 下载云端数据
     async function syncDownload() {
-        const config = await checkConfig();
-        if (!config) return;
+        const sid = getSyncId();
+        if (!sid) {
+            showToast('请先在 ⚙️ 设置中创建或输入同步码', 'error');
+            openSettings();
+            return;
+        }
 
         const btn = document.getElementById('btnDownload');
         btn.disabled = true;
@@ -595,21 +591,12 @@
         btn.innerHTML = '<span class="spinner"></span> 下载中...';
 
         try {
-            const url = `https://api.github.com/repos/${config.user}/${config.repo}/contents/data/expenses.json`;
-            const resp = await fetch(url, {
-                headers: {
-                    'Authorization': 'Bearer ' + config.token,
-                    'Accept': 'application/vnd.github.v3+json',
-                    'User-Agent': 'travel-expense-app'
-                }
+            const resp = await fetch(getBlobUrl(), {
+                headers: { 'User-Agent': 'travel-expense-app' }
             });
 
             if (resp.status === 404) {
-                showToast('⚠️ 网络问题或 Token 无效，检查设置', 'error');
-                btn.innerHTML = orig; btn.disabled = false; return;
-            }
-            if (resp.status === 403 || resp.status === 401) {
-                showToast('⚠️ Token 权限不足，需要 public_repo 权限', 'error');
+                showToast('云端暂无数据，请先上传', 'error');
                 btn.innerHTML = orig; btn.disabled = false; return;
             }
             if (!resp.ok) {
@@ -617,11 +604,11 @@
                 btn.innerHTML = orig; btn.disabled = false; return;
             }
 
-            const json = await resp.json();
-            const cloudData = JSON.parse(atob(json.content));
-            localStorage.setItem('travel_cloud_sha', json.sha);
-
-            if (!Array.isArray(cloudData)) { showToast('云端数据格式错误', 'error'); btn.innerHTML = orig; btn.disabled = false; return; }
+            const cloudData = await resp.json();
+            if (!Array.isArray(cloudData)) {
+                showToast('云端数据格式错误', 'error');
+                btn.innerHTML = orig; btn.disabled = false; return;
+            }
 
             // 合并：以云端为主，添加本地独有的记录
             const cloudIds = new Set(cloudData.map(d => d.id));
@@ -636,7 +623,7 @@
             updateSyncStatusDisplay();
             showToast(added > 0 ? `下载成功，合并了本地 ${added} 条记录` : '下载成功！数据已更新', 'success');
         } catch(err) {
-            showToast('下载失败：' + err.message, 'error');
+            showToast('下载失败：' + err.message + '（请检查网络）', 'error');
         }
         btn.innerHTML = orig;
         btn.disabled = false;
@@ -644,9 +631,33 @@
 
     // 上传到云端
     async function syncUpload() {
-        const config = await checkConfig();
-        if (!config) return;
         if (data.length === 0) { showToast('没有数据可以上传', 'error'); return; }
+
+        let sid = getSyncId();
+        if (!sid) {
+            // 还没有同步码，先创建一个
+            showToast('首次使用，正在创建同步码...', '');
+            try {
+                const createResp = await fetch('https://jsonblob.com/api/jsonBlob', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'User-Agent': 'travel-expense-app' },
+                    body: JSON.stringify(data)
+                });
+                if (!createResp.ok) { showToast('创建同步码失败', 'error'); return; }
+                const location = createResp.headers.get('Location');
+                if (!location) { showToast('创建同步码失败', 'error'); return; }
+                // Location 格式: https://jsonblob.com/api/jsonBlob/1234567890
+                sid = location.split('/').pop();
+                saveSyncId(sid);
+                showToast(`同步码已创建！码：${sid} 发给朋友填写即可`, 'success');
+                updateSyncStatusDisplay();
+                renderTable();
+                return;
+            } catch(err) {
+                showToast('创建同步码失败：' + err.message, 'error');
+                return;
+            }
+        }
 
         const btn = document.getElementById('btnUpload');
         btn.disabled = true;
@@ -654,58 +665,29 @@
         btn.innerHTML = '<span class="spinner"></span> 上传中...';
 
         try {
-            const content = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
-
-            // 先查一下文件的 SHA
-            let existingSha = localStorage.getItem('travel_cloud_sha');
-            try {
-                const ck = await fetch(`https://api.github.com/repos/${config.user}/${config.repo}/contents/data/expenses.json`, {
-                    headers: { 'Authorization': 'Bearer ' + config.token, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'travel-expense-app' }
-                });
-                if (ck.ok) existingSha = (await ck.json()).sha;
-            } catch(e) {}
-
-            const body = { message: `同步旅行数据 ${today()}`, content, branch: 'master' };
-            if (existingSha) body.sha = existingSha;
-
-            const resp = await fetch(`https://api.github.com/repos/${config.user}/${config.repo}/contents/data/expenses.json`, {
+            const resp = await fetch(getBlobUrl(), {
                 method: 'PUT',
-                headers: {
-                    'Authorization': 'Bearer ' + config.token,
-                    'Accept': 'application/vnd.github.v3+json',
-                    'User-Agent': 'travel-expense-app',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(body)
+                headers: { 'Content-Type': 'application/json', 'User-Agent': 'travel-expense-app' },
+                body: JSON.stringify(data)
             });
 
-            if (resp.status === 409) {
-                showToast('冲突！请先下载最新的云端数据再上传', 'error');
-                btn.innerHTML = orig; btn.disabled = false; return;
-            }
-            if (resp.status === 403) {
-                showToast('Token 权限不足，请检查 public_repo', 'error');
+            if (resp.status === 404) {
+                // 同步码失效了，重建一个
+                localStorage.removeItem('travel_sync_id');
+                showToast('同步码已过期，请重新上传', 'error');
                 btn.innerHTML = orig; btn.disabled = false; return;
             }
             if (!resp.ok) {
-                const ed = await resp.json().catch(() => ({}));
-                let msg = `上传失败 (${resp.status})`;
-                if (resp.status === 404) msg += '：用户名/仓库名有误，或 Token 未勾选 public_repo 权限';
-                else if (resp.status === 403) msg += '：Token 权限不足，需要 public_repo';
-                else msg += `：${ed.message || ''}`;
-                showToast(msg, 'error');
+                showToast(`上传失败 (${resp.status})`, 'error');
                 btn.innerHTML = orig; btn.disabled = false; return;
             }
-
-            const result = await resp.json();
-            localStorage.setItem('travel_cloud_sha', result.content.sha);
 
             const now = new Date();
             lastSyncTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
             updateSyncStatusDisplay();
             showToast('上传成功！云端数据已更新 ✅', 'success');
         } catch(err) {
-            showToast('上传失败：' + err.message, 'error');
+            showToast('上传失败：' + err.message + '（请检查网络）', 'error');
         }
         btn.innerHTML = orig;
         btn.disabled = false;
@@ -713,12 +695,8 @@
 
     // ===== 设置弹窗 =====
     function openSettings() {
-        const config = getSyncConfig();
-        if (config) {
-            document.getElementById('ghUser').value = config.user || '';
-            document.getElementById('ghRepo').value = config.repo || '';
-            document.getElementById('ghToken').value = config.token || '';
-        }
+        const sid = getSyncId();
+        document.getElementById('syncCodeDisplay').value = sid || '';
         updateModalStatus();
         document.getElementById('settingsModal').classList.add('active');
     }
@@ -726,28 +704,49 @@
     function closeSettings() { document.getElementById('settingsModal').classList.remove('active'); }
 
     function updateModalStatus() {
-        const config = getSyncConfig();
+        const sid = getSyncId();
         const dot = document.querySelector('#syncStatusRow .dot');
         const text = document.getElementById('syncStatusText');
-        if (config && config.token) {
+        if (sid) {
             dot.className = 'dot green';
-            text.textContent = `✅ 已配置 (${config.user}/${config.repo})`;
+            text.textContent = `✅ 已连接 · 同步码: ${sid}`;
         } else {
             dot.className = 'dot yellow';
-            text.textContent = '⚠️ 未配置';
+            text.textContent = '⚠️ 未连接，请创建或输入同步码';
         }
     }
 
-    function saveSettings() {
-        const user = document.getElementById('ghUser').value.trim();
-        const repo = document.getElementById('ghRepo').value.trim();
-        const token = document.getElementById('ghToken').value.trim();
-        if (!user || !repo || !token) { showToast('请填写完整信息', 'error'); return; }
-        saveSyncConfig({ user, repo, token });
+    function connectSync() {
+        const code = document.getElementById('syncCodeInput').value.trim();
+        if (!code) { showToast('请输入同步码', 'error'); return; }
+        // 验证同步码是否有效
+        saveSyncId(code);
         updateModalStatus();
         updateSyncStatusDisplay();
-        closeSettings();
-        showToast('同步设置已保存 ✅', 'success');
+        showToast('已连接！现在可以上传/下载了 ✅', 'success');
+    }
+
+    function disconnectSync() {
+        if (confirm('确定要断开同步吗？本地数据不会丢失。')) {
+            localStorage.removeItem('travel_sync_id');
+            updateModalStatus();
+            updateSyncStatusDisplay();
+            showToast('已断开同步', '');
+        }
+    }
+
+    function copySyncCode() {
+        const sid = getSyncId();
+        if (!sid) { showToast('还没有同步码，先上传一次', 'error'); return; }
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(sid).then(() => {
+                showToast('同步码已复制 📋', 'success');
+            }).catch(() => {
+                showToast('复制失败，请手动复制', 'error');
+            });
+        } else {
+            showToast('请手动复制同步码', 'error');
+        }
     }
 
     document.getElementById('settingsModal').addEventListener('click', function(e) {
