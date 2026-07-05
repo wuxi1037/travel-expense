@@ -346,29 +346,28 @@
 <div class="modal-overlay" id="settingsModal">
     <div class="modal">
         <h2>⚙️ 同步设置</h2>
-        <p class="modal-desc">两台手机用同一个同步码，数据就能互传</p>
+        <p class="modal-desc">用 GitHub Token 同步数据，两台手机共用一个 Gist</p>
 
-        <label>你的同步码</label>
-        <div style="display:flex;gap:8px;">
-            <input type="text" id="syncCodeDisplay" readonly placeholder="还没有同步码" style="flex:1;background:#f8fafc;">
-            <button class="btn-primary" onclick="copySyncCode()" style="white-space:nowrap;padding:10px 16px;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-family:inherit;">📋 复制</button>
+        <label>GitHub Personal Access Token</label>
+        <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+        <div class="modal-hint">
+            ① 打开 <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a><br>
+            ② 点「Generate new token (classic)」<br>
+            ③ 名称随便填，权限只勾 <strong>gist</strong> 一个<br>
+            ④ 生成后复制粘贴到上方 → 点「保存 Token」
         </div>
-        <div class="modal-hint">首次点「☁️ 上传云端」会自动生成同步码</div>
 
-        <label>输入朋友的同步码</label>
-        <div style="display:flex;gap:8px;">
-            <input type="text" id="syncCodeInput" placeholder="粘贴朋友的同步码" style="flex:1;">
-            <button class="btn-primary" onclick="connectSync()" style="white-space:nowrap;padding:10px 16px;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-family:inherit;">🔗 连接</button>
-        </div>
-        <div class="modal-hint">朋友上传后会生成同步码，你填到这里即可连接</div>
+        <label>当前同步连接</label>
+        <input type="text" id="syncStatusDisplay2" readonly placeholder="还没有连接" style="background:#f8fafc;">
 
         <div class="status-row" id="syncStatusRow">
             <span class="dot yellow"></span>
-            <span id="syncStatusText">未连接</span>
+            <span id="syncStatusText">未配置</span>
         </div>
 
         <div class="modal-btns">
             <button class="btn-secondary" onclick="disconnectSync()" style="background:#fee2e2;color:#dc2626;">断开连接</button>
+            <button class="btn-primary" onclick="saveSettings()">保存 Token</button>
             <button class="btn-secondary" onclick="closeSettings()">关闭</button>
         </div>
     </div>
@@ -554,34 +553,32 @@
         r.push(cur); return r;
     }
 
-    // ===== 云同步（使用 jsonblob.com，国内网络可用） =====
-    function getSyncId() {
-        try { return localStorage.getItem('travel_sync_id'); } catch(e) { return null; }
+    // ===== 云同步（使用 GitHub Gist，支持 CORS，国内可访问） =====
+    function getSyncConfig() {
+        try { const r = localStorage.getItem('travel_sync_config'); return r ? JSON.parse(r) : null; } catch(e) { return null; }
     }
-    function saveSyncId(id) {
-        if (id) localStorage.setItem('travel_sync_id', id);
-    }
+    function saveSyncConfig(c) { localStorage.setItem('travel_sync_config', JSON.stringify(c)); }
 
     function updateSyncStatusDisplay() {
         const el = document.getElementById('syncStatusDisplay');
-        const sid = getSyncId();
-        if (sid) {
+        const cfg = getSyncConfig();
+        if (cfg && cfg.token && cfg.gistId) {
             el.textContent = '☁️ 已连接' + (lastSyncTime ? ` · 上次: ${lastSyncTime}` : '');
+        } else if (cfg && cfg.token) {
+            el.textContent = '☁️ 已配置 Token';
         } else {
             el.textContent = '☁️ 未连接';
         }
     }
 
-    function getBlobUrl() {
-        const sid = getSyncId();
-        return sid ? `https://jsonblob.com/api/jsonBlob/${sid}` : null;
-    }
+    const GIST_FILENAME = 'travel_data.json';
+    const GIST_DESC = '豪游跟 - 旅行数据同步';
 
     // 下载云端数据
     async function syncDownload() {
-        const sid = getSyncId();
-        if (!sid) {
-            showToast('请先在 ⚙️ 设置中创建或输入同步码', 'error');
+        const cfg = getSyncConfig();
+        if (!cfg || !cfg.token || !cfg.gistId) {
+            showToast('请先在 ⚙️ 设置中配置 Token 并连接', 'error');
             openSettings();
             return;
         }
@@ -592,12 +589,19 @@
         btn.innerHTML = '<span class="spinner"></span> 下载中...';
 
         try {
-            const resp = await fetch(getBlobUrl(), {
-                headers: { 'User-Agent': 'travel-expense-app' }
+            const resp = await fetch(`https://api.github.com/gists/${cfg.gistId}`, {
+                headers: {
+                    'Authorization': 'Bearer ' + cfg.token,
+                    'Accept': 'application/vnd.github.v3+json'
+                }
             });
 
             if (resp.status === 404) {
-                showToast('云端暂无数据，请先上传', 'error');
+                showToast('同步连接已失效，请重新设置', 'error');
+                btn.innerHTML = orig; btn.disabled = false; return;
+            }
+            if (resp.status === 403) {
+                showToast('Token 无效或权限不足', 'error');
                 btn.innerHTML = orig; btn.disabled = false; return;
             }
             if (!resp.ok) {
@@ -605,7 +609,14 @@
                 btn.innerHTML = orig; btn.disabled = false; return;
             }
 
-            const cloudData = await resp.json();
+            const gist = await resp.json();
+            const fileData = gist.files && gist.files[GIST_FILENAME];
+            if (!fileData) {
+                showToast('云端暂无数据', 'error');
+                btn.innerHTML = orig; btn.disabled = false; return;
+            }
+
+            const cloudData = JSON.parse(fileData.content);
             if (!Array.isArray(cloudData)) {
                 showToast('云端数据格式错误', 'error');
                 btn.innerHTML = orig; btn.disabled = false; return;
@@ -624,7 +635,7 @@
             updateSyncStatusDisplay();
             showToast(added > 0 ? `下载成功，合并了本地 ${added} 条记录` : '下载成功！数据已更新', 'success');
         } catch(err) {
-            showToast('下载失败：' + err.message + '（请检查网络）', 'error');
+            showToast('下载失败：' + err.message, 'error');
         }
         btn.innerHTML = orig;
         btn.disabled = false;
@@ -634,7 +645,141 @@
     async function syncUpload() {
         if (data.length === 0) { showToast('没有数据可以上传', 'error'); return; }
 
-        let sid = getSyncId();
+        const cfg = getSyncConfig();
+        if (!cfg || !cfg.token) {
+            showToast('请先在 ⚙️ 设置中配置 GitHub Token', 'error');
+            openSettings();
+            return;
+        }
+
+        const btn = document.getElementById('btnUpload');
+        btn.disabled = true;
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner"></span> 上传中...';
+
+        try {
+            const content = JSON.stringify(data);
+            let resp;
+
+            if (cfg.gistId) {
+                // 更新已有 Gist
+                resp = await fetch(`https://api.github.com/gists/${cfg.gistId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': 'Bearer ' + cfg.token,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        files: { [GIST_FILENAME]: { content } }
+                    })
+                });
+            } else {
+                // 首次上传，创建新 Gist
+                resp = await fetch('https://api.github.com/gists', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + cfg.token,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        description: GIST_DESC,
+                        public: false,
+                        files: { [GIST_FILENAME]: { content } }
+                    })
+                });
+            }
+
+            if (resp.status === 401 || resp.status === 403) {
+                showToast('Token 无效或没有 gist 权限', 'error');
+                btn.innerHTML = orig; btn.disabled = false; return;
+            }
+            if (resp.status === 404) {
+                showToast('同步连接已失效，请重新设置', 'error');
+                localStorage.removeItem('travel_sync_config');
+                btn.innerHTML = orig; btn.disabled = false; return;
+            }
+            if (!resp.ok) {
+                const ed = await resp.json().catch(() => ({}));
+                showToast(`上传失败 (${resp.status}): ${ed.message || ''}`, 'error');
+                btn.innerHTML = orig; btn.disabled = false; return;
+            }
+
+            const result = await resp.json();
+
+            // 保存 gist ID
+            if (!cfg.gistId && result.id) {
+                cfg.gistId = result.id;
+                saveSyncConfig(cfg);
+            }
+
+            const now = new Date();
+            lastSyncTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+            updateSyncStatusDisplay();
+            showToast('上传成功！云端数据已更新 ✅', 'success');
+        } catch(err) {
+            showToast('上传失败：' + err.message, 'error');
+        }
+        btn.innerHTML = orig;
+        btn.disabled = false;
+    }
+
+    // ===== 设置弹窗 =====
+    function openSettings() {
+        const cfg = getSyncConfig();
+        document.getElementById('ghToken').value = cfg ? (cfg.token || '') : '';
+        document.getElementById('syncStatusDisplay2').value = cfg && cfg.gistId ? cfg.gistId : '';
+        updateModalStatus();
+        document.getElementById('settingsModal').classList.add('active');
+    }
+
+    function closeSettings() { document.getElementById('settingsModal').classList.remove('active'); }
+
+    function updateModalStatus() {
+        const cfg = getSyncConfig();
+        const dot = document.querySelector('#syncStatusRow .dot');
+        const text = document.getElementById('syncStatusText');
+        if (cfg && cfg.token && cfg.gistId) {
+            dot.className = 'dot green';
+            text.textContent = '✅ 已连接，可以上传/下载';
+        } else if (cfg && cfg.token) {
+            dot.className = 'dot yellow';
+            text.textContent = '⚠️ Token 已保存，首次上传会自动连接';
+        } else {
+            dot.className = 'dot yellow';
+            text.textContent = '⚠️ 未配置，请输入 Token';
+        }
+    }
+
+    function saveSettings() {
+        const token = document.getElementById('ghToken').value.trim();
+        if (!token) { showToast('请输入 Token', 'error'); return; }
+        const cfg = getSyncConfig() || {};
+        cfg.token = token;
+        saveSyncConfig(cfg);
+        updateModalStatus();
+        updateSyncStatusDisplay();
+        showToast('Token 已保存 ✅ 点「上传云端」开始同步', 'success');
+    }
+
+    function disconnectSync() {
+        if (confirm('确定要断开同步吗？')) {
+            localStorage.removeItem('travel_sync_config');
+            updateModalStatus();
+            updateSyncStatusDisplay();
+            showToast('已断开同步', '');
+        }
+    }
+
+    const cfg = getSyncConfig();
+    if (cfg && cfg.gistId) {
+        document.getElementById('syncStatusDisplay2').value = cfg.gistId;
+    }
+
+    document.getElementById('settingsModal').addEventListener('click', function(e) {
+        if (e.target === this) closeSettings();
+    });
         if (!sid) {
             // 还没有同步码，先创建一个
             showToast('首次使用，正在创建同步码...', '');
