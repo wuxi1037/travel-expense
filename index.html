@@ -346,19 +346,22 @@
 <div class="modal-overlay" id="settingsModal">
     <div class="modal">
         <h2>⚙️ 同步设置</h2>
-        <p class="modal-desc">用 GitHub Token 同步数据，两台手机共用一个 Gist</p>
+        <p class="modal-desc">用 GitHub Token 同步数据，两台手机填<strong>同一个 Token</strong></p>
 
-        <label>GitHub Personal Access Token</label>
+        <label>GitHub Token</label>
         <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
         <div class="modal-hint">
             ① 打开 <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a><br>
-            ② 点「Generate new token (classic)」<br>
-            ③ 名称随便填，权限只勾 <strong>gist</strong> 一个<br>
-            ④ 生成后复制粘贴到上方 → 点「保存 Token」
+            ② 点「Generate new token (classic)」→ 名称随便填<br>
+            ③ 权限只勾 <strong>gist</strong> 一个 → 生成后复制粘贴到上方
         </div>
 
-        <label>当前同步连接</label>
-        <input type="text" id="syncStatusDisplay2" readonly placeholder="还没有连接" style="background:#f8fafc;">
+        <label>你的同步链接（创建后自动生成）</label>
+        <input type="text" id="syncGistId" readonly placeholder="首次上传后自动生成" style="background:#f8fafc;">
+
+        <label>连接朋友的同步链接</label>
+        <input type="text" id="friendGistId" placeholder="把对方的同步链接粘贴到这里">
+        <div class="modal-hint">你们俩用<strong>同一个 Token</strong> + <strong>同一个同步链接</strong>就能互传数据</div>
 
         <div class="status-row" id="syncStatusRow">
             <span class="dot yellow"></span>
@@ -367,7 +370,7 @@
 
         <div class="modal-btns">
             <button class="btn-secondary" onclick="disconnectSync()" style="background:#fee2e2;color:#dc2626;">断开连接</button>
-            <button class="btn-primary" onclick="saveSettings()">保存 Token</button>
+            <button class="btn-primary" onclick="saveSettings()">保存设置</button>
             <button class="btn-secondary" onclick="closeSettings()">关闭</button>
         </div>
     </div>
@@ -729,7 +732,8 @@
     function openSettings() {
         const cfg = getSyncConfig();
         document.getElementById('ghToken').value = cfg ? (cfg.token || '') : '';
-        document.getElementById('syncStatusDisplay2').value = cfg && cfg.gistId ? cfg.gistId : '';
+        document.getElementById('syncGistId').value = cfg && cfg.gistId ? cfg.gistId : '';
+        document.getElementById('friendGistId').value = '';
         updateModalStatus();
         document.getElementById('settingsModal').classList.add('active');
     }
@@ -742,10 +746,10 @@
         const text = document.getElementById('syncStatusText');
         if (cfg && cfg.token && cfg.gistId) {
             dot.className = 'dot green';
-            text.textContent = '✅ 已连接，可以上传/下载';
+            text.textContent = `✅ 已连接（同步链接已就绪）`;
         } else if (cfg && cfg.token) {
             dot.className = 'dot yellow';
-            text.textContent = '⚠️ Token 已保存，首次上传会自动连接';
+            text.textContent = '⚠️ 已配置 Token，首次上传会自动创建同步链接';
         } else {
             dot.className = 'dot yellow';
             text.textContent = '⚠️ 未配置，请输入 Token';
@@ -757,10 +761,20 @@
         if (!token) { showToast('请输入 Token', 'error'); return; }
         const cfg = getSyncConfig() || {};
         cfg.token = token;
+        // 如果填了朋友的同步链接，直接用它的
+        const friendGist = document.getElementById('friendGistId').value.trim();
+        if (friendGist) {
+            cfg.gistId = friendGist;
+            showToast('已连接到朋友的同步链接 ✅', 'success');
+        } else {
+            showToast('Token 已保存 ✅', 'success');
+        }
         saveSyncConfig(cfg);
         updateModalStatus();
         updateSyncStatusDisplay();
-        showToast('Token 已保存 ✅ 点「上传云端」开始同步', 'success');
+        if (!friendGist) {
+            // 不自动关闭，让用户决定
+        }
     }
 
     function disconnectSync() {
@@ -774,7 +788,7 @@
 
     const cfg = getSyncConfig();
     if (cfg && cfg.gistId) {
-        document.getElementById('syncStatusDisplay2').value = cfg.gistId;
+        document.getElementById('syncGistId').value = cfg.gistId;
     }
 
     document.getElementById('settingsModal').addEventListener('click', function(e) {
